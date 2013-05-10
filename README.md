@@ -52,7 +52,7 @@ analyse sounds in large volumes of sound data.
 
 
 
-License
+Licence
 -------
 
 Copyright (C) 2013  Dragonfly Science
