@@ -44,7 +44,7 @@ You are welcome to contrbute better detectors, or detectors for the sound that y
 Please fork the code on github. 
 
 
-Songscope
+Songscape
 ---------
 
 Kokako is used by the songscape project (http://wwww.songscape.org), which aims to use machine learning to
