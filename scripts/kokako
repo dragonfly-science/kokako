@@ -1,0 +1,8 @@
+#! python
+
+import argparse
+
+parser = argparse.ArgumentParser()
+
+`python kokako.py`
+`python kokako.py <detector name> [<detector version>] [-o <filename>] <path>`

@@ -22,15 +22,15 @@ This is a python project
 Usage
 -----
 
-`python kokako.py --help`
+`kokako --help`
 
 Provides help on how to use `kokako`
 
-`python kokako.py --list`
+`kokako --list`
 
 List available detectors
 
-`python kokako.py <detector name> [<detector version>] [-o <filename>] <path>`
+`kokako <detector name> [<detector version>] [-o <filename>] <path>`
 
 Score sound files. To score a file specify which detector to use (<detector name>), an optional version (<detector version>),
 and a path (<path>). If path is a `wav` file then `kokako` will return a single score. If path is a directory, then `kokako` 
@@ -44,7 +44,7 @@ You are welcome to contrbute better detectors, or detectors for the sound that y
 Please fork the code on github. 
 
 
-Songscope
+Songscape
 ---------
 
 Kokako is used by the songscape project (http://wwww.songscape.org), which aims to use machine learning to
