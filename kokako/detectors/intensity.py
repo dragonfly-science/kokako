@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import mlab
+from kokako.score import Detector
 
 class IntensityDetector(Detector):
     code='intensity'

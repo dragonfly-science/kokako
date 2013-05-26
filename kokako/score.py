@@ -3,12 +3,9 @@ from pylab import clf, specgram, savefig, mean, log
 from matplotlib import mlab
 from matplotlib import pyplot as plt
 from datetime import datetime
+from contextlib import closing
+import wave
 
-
-# Possible signals
-SIGNALS = {'kiwi': 'Kiwi calls',
-    'intensity': 'Mean energy'
-    }
 
 class Detector(object):
     """Base class for detectors
@@ -33,7 +30,7 @@ class Detector(object):
     def get_audio(self, file_handle, offset=0, duration=60):
         """Returns an array with the audio data contained in
             the file file_handle, reading from offset (seconds)
-            for duratioon (seconds).
+            for duration (seconds).
         """
         with closing(wave.open(file_handle, 'r')) as wav:
             wav.rewind()

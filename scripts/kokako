@@ -3,6 +3,16 @@
 import argparse
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--output', 
+    default=sys.stdout, 
+    type=argparse.FileType('w'),
+    help='output file')
+parser.add_argument('detector', help='Name of the detector')
+parser.add_argument('path', help='path to run')
 
+args = parser.parse_args()
+
+'''
 `python kokako.py`
 `python kokako.py <detector name> [<detector version>] [-o <filename>] <path>`
+'''

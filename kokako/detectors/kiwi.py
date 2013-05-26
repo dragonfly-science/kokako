@@ -3,6 +3,7 @@ from pylab import clf, specgram, mean, log
 from matplotlib import mlab
 from datetime import datetime
 from kokako.score import Detector
+import json
 
 class SimpleKiwiDetector(Detector):
     code='simple-kiwi'
@@ -25,5 +26,5 @@ class SimpleKiwiDetector(Detector):
         freqs2 = np.where((spec2[1] >= self.lower_syllable_frequency)*(spec2[1] <= self.upper_syllable_frequency))
         max_kiwi = max(np.max(spec2[0][freqs2[0],:], 0))
         mean_kiwi = np.exp(np.mean(np.mean(np.log(spec2[0][freqs2[0], :]), 0)))
-        return (max_kiwi/mean_kiwi,)
+        return json.dumps({'score': max_kiwi/mean_kiwi})
 
