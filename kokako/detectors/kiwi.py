@@ -8,7 +8,7 @@ import json
 class SimpleKiwiDetector(Detector):
     code='simple-kiwi'
     signal = 'kiwi'
-    description = 'Simple detector for north-island brown kiwi, based on energy in  between 1600 and 2000 Hz'
+    description = 'Simple detector for north-island brown kiwi, based on energy between 1600 and 2200 Hz'
     version = '0.1.1'
     window = 0.032
     lower_call_frequency = 1600
@@ -16,8 +16,7 @@ class SimpleKiwiDetector(Detector):
     lower_syllable_frequency = 0.5
     upper_syllable_frequency = 1.1
 
-    def score(self, filename, offset, duration):
-        audio, framrate = self.get_audio(filename, offset, duration)
+    def score(self, audio, framerate):
         NFFT = int(self.window*framerate)
         clf()
         spec = mlab.specgram(audio, NFFT=NFFT, noverlap=NFFT/2, Fs=framerate)

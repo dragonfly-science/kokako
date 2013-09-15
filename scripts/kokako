@@ -1,18 +1,35 @@
 #! python
 
 import argparse
+import os
+import sys
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--output', 
-    default=sys.stdout, 
-    type=argparse.FileType('w'),
-    help='output file')
-parser.add_argument('detector', help='Name of the detector')
-parser.add_argument('path', help='path to run')
+from kokako.score import Detector
+from kokako.detectors import  *
 
-args = parser.parse_args()
+detectors = Detector.__subclasses__()
+detector_lookup = {}
+for detector in detectors:
+    detector_lookup[detector.code] = detector
 
-'''
-`python kokako.py`
-`python kokako.py <detector name> [<detector version>] [-o <filename>] <path>`
-'''
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-o', 
+        '--output',
+        default=sys.stdout, 
+        type=argparse.FileType('w'),
+        help='output file')
+    parser.add_argument('detector', help='name of the detector to run')
+    parser.add_argument('-p', '--path', help='path to walk over', default='.')
+    
+    args = parser.parse_args()
+    if not detector_lookup.has_key(args.detector):
+        msg = "Unknown detector, %s" % args.detector
+        raise ValueError, msg
+
+        
+        
+        
+
+    
+
