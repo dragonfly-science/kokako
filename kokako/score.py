@@ -23,17 +23,17 @@ class Detector(object):
         """Represent the detector as a string"""
         return "%s %s" % (self.code, self.version)
 
-    def score(self, audio, framerate):
+    def score(self, filename, offset=0, duration=0):
         """Returns the score as a tuple of a number and a string. The string
         is formatted as JSON"""
         raise NotImplementedError
 
-    def get_wav(self, file_handle, offset=0, duration=60):
+    def get_audio(self, filename, offset=0, duration=0):
         """Returns an array with the audio data contained in
             the file file_handle, reading from offset (seconds)
             for duration (seconds).
         """
-        with closing(wave.open(file_handle, 'r')) as wav:
+        with closing(wave.open(filename, 'rb')) as wav:
             wav.rewind()
             framerate = wav.getframerate()
             nchannels = wav.getnchannels()

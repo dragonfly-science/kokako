@@ -14,3 +14,13 @@ class IntensityDetector(Detector):
         clf()
         spec = mlab.specgram(audio, NFFT=self.NFFT, Fs=framerate)
         return (sum(np.min(spec[0][10:, ], 1)),)
+
+
+class AmplitudeDetector(Detector):
+    code='amplitude'
+    signal = 'amplitude'
+    description = 'Peak amplitude'
+
+    def score(self, filename, offset=0, duration=0):
+        audio, framrate = self.get_audio(filename, offset, duration)
+        return max(abs(audio))

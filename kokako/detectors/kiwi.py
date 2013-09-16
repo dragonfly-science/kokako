@@ -16,7 +16,8 @@ class SimpleKiwiDetector(Detector):
     lower_syllable_frequency = 0.5
     upper_syllable_frequency = 1.1
 
-    def score(self, audio, framerate):
+    def score(self, filename, duration=0, framerate=0):
+        audio, framerate = self.get_audio(filename, duration=0, framerate=0)
         NFFT = int(self.window*framerate)
         clf()
         spec = mlab.specgram(audio, NFFT=NFFT, noverlap=NFFT/2, Fs=framerate)

@@ -7,10 +7,11 @@ import sys
 from kokako.score import Detector
 from kokako.detectors import  *
 
+# Get the detectors that we know about
 detectors = Detector.__subclasses__()
 detector_lookup = {}
-for detector in detectors:
-    detector_lookup[detector.code] = detector
+for d in detectors:
+    detector_lookup[d.code] = d()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -23,10 +24,20 @@ if __name__ == "__main__":
     parser.add_argument('-p', '--path', help='path to walk over', default='.')
     
     args = parser.parse_args()
-    if not detector_lookup.has_key(args.detector):
+    try:
+        detector = detector_lookup[args.detector]
+    except KeyError:
         msg = "Unknown detector, %s" % args.detector
         raise ValueError, msg
 
+for root, dirs, files in os.walk(args.path):
+    for f in files:
+        print f
+        if f.endswith(".wav"):
+            path = os.path.join(root, f)
+            print path, detector.score(path)
+
+    
         
         
         
