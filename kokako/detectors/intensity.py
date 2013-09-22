@@ -1,9 +1,8 @@
 import numpy as np
-from matplotlib import mlab
 from kokako.score import Detector
 
 class Energy(Detector):
-    code='energy-above-200'
+    code = 'energy-above-200'
     description = 'Energy of the minimum spectrogram, above 200 Hz'
     version = '0.1'
     window = 0.032
@@ -17,7 +16,7 @@ class Energy(Detector):
 
 
 class LowEnergy(Detector):
-    code='energy-below-1000'
+    code = 'energy-below-1000'
     description = 'Energy of the minimum spectrogram, below 1 kHz'
     version = '0.1'
     window = 0.032
@@ -31,7 +30,7 @@ class LowEnergy(Detector):
 
 
 class Amplitude(Detector):
-    code='amplitude'
+    code = 'amplitude'
     description = 'Peak amplitude'
     version = '0.1'
 

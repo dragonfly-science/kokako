@@ -1,9 +1,6 @@
 import numpy as np
 import struct
-from pylab import clf, specgram, savefig, mean, log
 from matplotlib import mlab
-from matplotlib import pyplot as plt
-from datetime import datetime
 from contextlib import closing
 import wave
 
@@ -12,15 +9,19 @@ class Audio(object):
         self.audio = audio
         self.framerate = framerate
         self._specgrams = {}
+        self.specgram_nfft = None
+        self.specgram_overlap = None
+        self.specgram = None
+        self.specgram_freqs = None
+        self.specgram_bins = None
  
     def calculate_specgram(self, nfft, noverlap, **kwargs):
-        spec = specgram(self.audio, NFFT=nfft, Fs=self.framerate, noverlap=noverlap, **kwargs)
+        spec = mlab.specgram(self.audio, NFFT=nfft, Fs=self.framerate, noverlap=noverlap, **kwargs)
         self.specgram_nfft = nfft
         self.specgram_overlap = noverlap
         self.specgram = spec[0]
         self.specgram_freqs = spec[1]
         self.specgram_bins = spec[2]
-        self.specgram_image = spec[3]
     
     @property
     def nchannels(self):
