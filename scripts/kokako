@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 
-from kokako.score import Detector
+from kokako.score import Detector, Audio
 from kokako.detectors import  *
 
 # Get the detectors that we know about
@@ -20,22 +20,26 @@ if __name__ == "__main__":
         default=sys.stdout, 
         type=argparse.FileType('w'),
         help='output file')
-    parser.add_argument('detector', help='name of the detector to run')
+    parser.add_argument('detectors', nargs='+', help='name of the detectors to run')
     parser.add_argument('-p', '--path', help='path to walk over', default='.')
     
     args = parser.parse_args()
+    detectors = []
     try:
-        detector = detector_lookup[args.detector]
+        for detector in args.detectors:
+            detectors.append(detector_lookup[detector])
     except KeyError:
         msg = "Unknown detector, %s" % args.detector
         raise ValueError, msg
 
-for root, dirs, files in os.walk(args.path):
-    for f in files:
-        print f
-        if f.endswith(".wav"):
-            path = os.path.join(root, f)
-            print path, detector.score(path)
+    header = ['path'] + detectors
+    for root, dirs, files in os.walk(args.path):
+        for f in files:
+            if f.endswith(".wav"):
+                path = os.path.join(root, f)
+                audio = Audio(path)
+                for detector in detectors:
+                    print path, detector, detector.score(audio)
 
     
         
