@@ -1,0 +1,54 @@
+#!/usr/bin/python
+"""Sort data into training sets. Usage:
+
+scripts/training_sets <corpus base> <source dir> <training dir> <training portion> <validation dir> <validation portion> <test dir> <test portion>
+"""
+
+
+import random
+import sys, os
+
+CLASSES = (("M", "male-kiwi"),
+           ("F", "female-kiwi"),
+           ("N", "no-kiwi"),
+           )
+
+def main(corpus_base, srcdir,
+         train_dir, train_portion,
+         validate_dir, validate_portion,
+         test_dir, test_portion):
+    dirs = [os.path.join(corpus_base, x) for x in
+            (train_dir, validate_dir, test_dir, srcdir)]
+    srcdir = dirs.pop()
+    for d in dirs:
+        try:
+            os.makedirs(d)
+        except OSError:
+            pass
+
+    _portions = [float(x) for x in (train_portion, validate_portion, test_portion)]
+    portions = []
+    cum_portions = []
+    prev = 0
+    for x in _portions:
+        p = x / sum(_portions)
+        portions.append(p)
+        cum_portions.append(prev + p)
+        prev += p
+
+    for prefix, subdir in CLASSES:
+        files = os.listdir(os.path.join(srcdir, subdir))
+        for f in files:
+            r = random.random()
+            for i, p in enumerate(cum_portions):
+                if r < p:
+                    dest = dirs[i]
+                    break
+            os.link(os.path.join(srcdir, subdir, f), os.path.join(dest, "%s-%s" % (prefix,f)))
+
+
+try:
+    main(*sys.argv[1:])
+except TypeError, exception:
+    print __doc__
+    raise
