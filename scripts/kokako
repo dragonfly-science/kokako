@@ -14,8 +14,10 @@ for d in detectors:
     detector_lookup[d.code] = d()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-o', 
+    parser = argparse.ArgumentParser(epilog="Available detectors:\n  " +
+                                     "\n  ".join(d for d in detector_lookup),
+                                    formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('-o',
         '--output',
         default=sys.stdout,
         type=argparse.FileType('w'),
