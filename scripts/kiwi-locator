@@ -1,0 +1,109 @@
+#!/usr/bin/python
+import argparse
+import os
+import sys
+
+from kokako.score import get_audio
+
+import numpy as np
+from matplotlib import mlab
+
+NFFT = 512
+LOWER_CALL_FREQUENCY = 1600
+UPPER_CALL_FREQUENCY = 2200
+LOWER_SYLLABLE_FREQUENCY = 0.5
+UPPER_SYLLABLE_FREQUENCY = 1.3
+LOWER_NOISE_FREQUENCY = 7.5
+UPPER_NOISE_FREQUENCY = 17.3
+SYLLABLE_NOISE_GAP = 2.8
+
+THRESHOLD = 20.0
+
+def locate_kiwis(audio):
+    #find the intensity in the frequencies that kiwis use, using a
+    #simple square filter.
+    audio.calculate_specgram(nfft=NFFT, noverlap=NFFT/2)
+    kiwi_band = np.where((audio.specgram_freqs >= LOWER_CALL_FREQUENCY) *
+                         (audio.specgram_freqs <= UPPER_CALL_FREQUENCY))[0]
+
+    kiwi_bin = np.mean((audio.specgram[kiwi_band]), 0)
+
+    #kiwi_bin should warble at about 1Hz where kiwis are present, due
+    #to their syllabic calls. You need a big window to capture ~0.5Hz
+    #signals, but to capture accurate timing you need many windows. So
+    #the overlap is large.
+    #
+    #There are 1874 samples.
+    #a window of 128 is 4.1 seconds
+    #there are 110 windows overlapping by 112 samples
+    scale = len(kiwi_bin) / 60.0
+    window = 128
+    overlap = int(window - scale * 0.5) # i.e. half second accuracy
+    syllablegram = mlab.specgram(kiwi_bin,
+                                 NFFT=window, noverlap=overlap, Fs=scale)
+    kiwi_freqs = np.where((syllablegram[1] >= LOWER_SYLLABLE_FREQUENCY) *
+                          (syllablegram[1] <= UPPER_SYLLABLE_FREQUENCY))[0]
+    noise_freqs = np.where((syllablegram[1] >= LOWER_NOISE_FREQUENCY) *
+                           (syllablegram[1] <= UPPER_NOISE_FREQUENCY))[0]
+
+    #Use the maximum band of the three in the kiwi range -- as they
+    #vary the spacing of their syllables, different bands will light
+    #up and drop out. Averaging them is noisier in practice and
+    #wronger in theory.
+    kiwi_bands = np.log(syllablegram[0][kiwi_freqs])
+    kiwi = np.max(kiwi_bands, 0)
+
+    #high frequency median gives a background level. Kiwis also make
+    #variation in this range, but it is always smaller than their
+    #syllabic variation -- the gap between HF and LF always seems
+    #to widen when kiwis call, but not when e.g. wind blows.
+    noise_bands = np.log(syllablegram[0][noise_freqs])
+    median_noise = np.median(noise_bands, 0)
+    m = kiwi - median_noise
+
+    #median using a convolution window of 5 to smother spikes, dropouts
+    m5 = [np.concatenate((m[:1], m[:1], m[:-2])),
+          np.concatenate((m[:1], m[:-1])),
+          m,
+          np.concatenate((m[1:], m[-1:])),
+          np.concatenate((m[2:], m[-1:], m[-1:]))]
+
+    #here is the actual test
+    kiwi_there = np.median(m5, 0) > SYLLABLE_NOISE_GAP
+
+    scale = 60.0 / len(kiwi_there)
+    timepoints = []
+    kiwi = False
+    start = 0
+    for i, t in enumerate(kiwi_there):
+        if t != kiwi:
+            if kiwi and i - start > 5:
+                # short positives are probably false -- kiwis don't do that
+                timepoints.append(start * scale)
+                timepoints.append(i * scale)
+            kiwi = t
+            start = i
+    if kiwi:
+        timepoints.append(start * scale)
+        timepoints.append((i + 1) * scale)
+    return timepoints
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-o',
+        '--output',
+        default=sys.stdout,
+        type=argparse.FileType('w'),
+        help='output file')
+    parser.add_argument('paths', nargs='+', help='paths to walk over', default=['.'])
+    args = parser.parse_args()
+
+    for path in args.paths:
+        for root, dirs, files in os.walk(path):
+            for f in files:
+                if f.endswith(".wav"):
+                    path = os.path.join(root, f)
+                    audio = get_audio(path)
+                    print path, ' '.join('%.1f' % x for x in locate_kiwis(audio))
+
+main()
