@@ -1,0 +1,17 @@
+#!/bin/bash
+
+#convert an audio file into an 8kHz 16bit mono wav file, in place, if
+#necessary, leaving the original there with the suffix '-ORIGINAL-not-8k'
+
+abspath=$(readlink -f "$1")
+
+file -b "$abspath" | grep -q 'PCM, 16 bit, mono 8000 Hz' && exit
+
+original="$abspath-ORIGINAL-not-8k"
+mv "$abspath" "$original"
+
+URI="file://$original"
+CAPS="audio/x-raw,channels=1,rate=8000,format=S16LE"
+
+gst-launch-1.0 uridecodebin uri="$URI" ! audioconvert ! audioresample \
+		! $CAPS ! wavenc ! filesink location="$abspath"
