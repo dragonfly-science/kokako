@@ -33,12 +33,15 @@ def locate_kiwis(audio):
     #signals, but to capture accurate timing you need many windows. So
     #the overlap is large.
     #
-    #There are 1874 samples.
-    #a window of 128 is 4.1 seconds
-    #there are 110 windows overlapping by 112 samples
-    scale = len(kiwi_bin) / 60.0
+    #Per minute:
+    # there are 1874 samples.
+    # a window of 128 is 4.1 seconds
+    # there are 110 windows overlapping by 112 samples
+    duration = float(audio.duration)
+    scale = len(kiwi_bin) / duration
     window = 128
     overlap = int(window - scale * 0.5) # i.e. half second accuracy
+    #print overlap, scale, audio.duration
     syllablegram = mlab.specgram(kiwi_bin,
                                  NFFT=window, noverlap=overlap, Fs=scale)
     kiwi_freqs = np.where((syllablegram[1] >= LOWER_SYLLABLE_FREQUENCY) *
@@ -71,7 +74,7 @@ def locate_kiwis(audio):
     #here is the actual test
     kiwi_there = np.median(m5, 0) > SYLLABLE_NOISE_GAP
 
-    scale = 60.0 / len(kiwi_there)
+    scale = duration / len(kiwi_there)
     timepoints = []
     kiwi = False
     start = 0
@@ -100,7 +103,7 @@ def main():
 
     for path in args.paths:
         for root, dirs, files in os.walk(path):
-            for f in files:
+            for f in sorted(files):
                 if f.endswith(".wav"):
                     path = os.path.join(root, f)
                     audio = get_audio(path)
