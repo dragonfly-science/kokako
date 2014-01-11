@@ -47,7 +47,7 @@ Please fork the code on github.
 Songscape
 ---------
 
-Kokako is used by the songscape project (http://wwww.songscape.org), which aims to use machine learning to
+Kokako is used by the songscape project (http://www.songscape.org), which aims to use machine learning to
 analyse sounds in large volumes of sound data.
 
 
