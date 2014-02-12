@@ -8,6 +8,18 @@ from kokako.score import get_audio
 import numpy as np
 from matplotlib import mlab
 
+DO_PRETTY_PICTURES = True
+
+if DO_PRETTY_PICTURES:
+    from matplotlib import pylab
+    specgram = pylab.specgram
+    maybe_show = pylab.show
+else:
+    specgram = mlab.specgram
+    def maybe_show():
+        pass
+
+
 NFFT = 512
 LOWER_CALL_FREQUENCY = 1600
 UPPER_CALL_FREQUENCY = 2200
@@ -42,8 +54,8 @@ def locate_kiwis(audio):
     window = 128
     overlap = int(window - scale * 0.5) # i.e. half second accuracy
     #print overlap, scale, audio.duration
-    syllablegram = mlab.specgram(kiwi_bin,
-                                 NFFT=window, noverlap=overlap, Fs=scale)
+    syllablegram = specgram(kiwi_bin,
+                            NFFT=window, noverlap=overlap, Fs=scale)
     kiwi_freqs = np.where((syllablegram[1] >= LOWER_SYLLABLE_FREQUENCY) *
                           (syllablegram[1] <= UPPER_SYLLABLE_FREQUENCY))[0]
     noise_freqs = np.where((syllablegram[1] >= LOWER_NOISE_FREQUENCY) *
@@ -89,6 +101,7 @@ def locate_kiwis(audio):
     if kiwi:
         timepoints.append(start * scale)
         timepoints.append((i + 1) * scale)
+    maybe_show()
     return timepoints
 
 def main():
