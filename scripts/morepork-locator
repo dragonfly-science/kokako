@@ -1,0 +1,182 @@
+#!/usr/bin/python
+import argparse
+import os
+import sys
+
+from kokako.score import get_audio
+
+import numpy as np
+from matplotlib import mlab, pyplot as plt
+
+from scipy.signal import fftconvolve
+
+DO_PRETTY_PICTURES = False
+
+if DO_PRETTY_PICTURES:
+    from matplotlib import pylab
+    specgram = pylab.specgram
+    maybe_show = pylab.show
+else:
+    specgram = mlab.specgram
+    def maybe_show():
+        pass
+
+
+NFFT = 512
+LOWER_CALL_FREQUENCY = 740
+UPPER_CALL_FREQUENCY = 1050
+TARGET_LENGTH = 0.72
+TARGET_GAP = 0.24
+TARGET_LEFT = 0.28
+TARGET_RIGHT = 0.20
+THRESHOLD = 1.0
+STOP_TRYING_THRESHOLD = 50
+CALL_DIFF_THRESHOLD = 1.45
+SMOOTH_CALL_THRESHOLD = 4.0
+
+def median5(m):
+    s = [m[0]]
+    e = [m[-1]]
+    return np.median([np.concatenate((s * 2, m[:-2])),
+                      np.concatenate((s, m[:-1])),
+                      m,
+                      np.concatenate((m[1:], e)),
+                      np.concatenate((m[2:], e * 2))
+                  ], 0)
+
+def smooth(m, radius=3, shape=5):
+    w = np.kaiser(radius * 2 + 1, shape)
+
+    m = np.pad(m[:], radius, 'mean', stat_length=radius*2)
+    #return np.convolve(w / w.sum(), m[0] * radius + m + m[-1] * radius, 'valid')
+    return np.convolve(w / w.sum(), m, 'valid')
+
+
+def locate_calls(audio, title=None):
+    overlap = NFFT / 2
+    audio.calculate_specgram(nfft=NFFT, noverlap=overlap)
+    #find the intensity in the frequencies that  use, using a
+    #simple square filter.
+    call_band = np.where((audio.specgram_freqs >= LOWER_CALL_FREQUENCY) *
+                         (audio.specgram_freqs <= UPPER_CALL_FREQUENCY))[0]
+
+    call_specgram = audio.specgram[call_band]
+
+    call_max = np.max(call_specgram, 0)
+    call_min = np.median(call_specgram, 0)
+
+
+    duration = float(audio.duration)
+    effective_samples = overlap * (len(call_max) - 1.0) + NFFT
+    #XXX better conversion is possible
+    samples2secs = duration / len(call_max)
+    #print len(call_max), effective_samples, duration * audio.framerate
+
+    call_bin = call_max / call_min
+    smooth_call_bin = smooth(call_bin, radius=5)
+    background = smooth(call_bin, radius=90, shape=3)
+
+    call_diff = smooth_call_bin / background
+
+    #possible_birds = np.where(smooth_call_bin - background > SMOOTH_CALL_THRESHOLD)[0]
+    possible_birds = np.where(call_diff > CALL_DIFF_THRESHOLD)[0]
+
+    #coalesce possible_birds into state switches
+    state = 0
+    syllables = []
+    prev = None
+    for pb in possible_birds:
+        if pb - 1 != prev:
+            if prev is not None:
+                call.append(prev + 1)
+            call = [pb]
+            syllables.append(call)
+        prev = pb
+    if prev is not None:
+        call.append(prev + 1)
+
+    #print samples2secs
+    timed_syllables = [(x * samples2secs, y * samples2secs) for x, y in syllables]
+
+    candidates = []
+    for i in range(len(timed_syllables) - 1):
+        left_start, left_stop = timed_syllables[i]
+        for j in range(i + 1, len(timed_syllables)):
+            right_start, right_stop = timed_syllables[j]
+            overall_err = right_stop - left_start - TARGET_LENGTH
+            left_err = left_stop - left_start  - TARGET_LEFT
+            gap_err = right_start - left_stop - TARGET_GAP
+            right_err = right_stop - right_start - TARGET_RIGHT
+            err = overall_err ** 2 * 2 + left_err ** 2 + gap_err ** 2 + right_err ** 2
+            #print i, j,  err
+            if err > STOP_TRYING_THRESHOLD:
+                break
+            candidates.append([err, i, j])
+
+    candidates.sort()
+    #print candidates
+    used = set()
+    winners = []
+    for score, i, j in candidates:
+        if score > THRESHOLD:
+            break
+        if i not in used and j not in used:
+            winners.append([timed_syllables[i][0], timed_syllables[j][1]])
+            used.update((i, j))
+
+
+    if 1:
+        axis = [x * samples2secs for x in range(len(background))]
+
+        plt.plot(axis, (smooth_call_bin - background) * 0.25 + 4)
+        plt.plot(axis, call_diff)
+
+        pb_mask = np.zeros(len(background))
+        for x in possible_birds:
+            pb_mask[x] = 1.1
+        plt.plot(axis, pb_mask)
+
+        #print syllables
+        pb_mask3 = np.zeros(len(background))
+
+        for s, e in syllables:
+            pb_mask3[s] = 0.9
+            pb_mask3[e] = 0.7
+
+        wx = []
+        wy = []
+        for w in winners:
+            wx.append((w[0] + w[1]) / 2)
+            wy.append(0.1)
+        plt.plot(wx, wy, '^')
+
+        #plt.plot(pb_mask3, '.')
+        plt.show()
+
+
+
+    #print winners
+    return sorted(winners)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-o',
+        '--output',
+        default=sys.stdout,
+        type=argparse.FileType('w'),
+        help='output file')
+    parser.add_argument('paths', nargs='+', help='paths to walk over', default=['.'])
+    args = parser.parse_args()
+
+    for path in args.paths:
+        for root, dirs, files in os.walk(path):
+            for f in sorted(files):
+                if f.endswith(".wav"):
+                    path = os.path.join(root, f)
+                    audio = get_audio(path)
+                    print path,
+                    sys.stderr.flush()
+                    print ' '.join('%.2f-%.2f' % (x, y)
+                                   for x, y in locate_calls(audio, f))
+
+main()
