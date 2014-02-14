@@ -3,6 +3,8 @@ import argparse
 import os
 import sys
 
+from math import log
+
 from kokako.score import get_audio
 
 import numpy as np
@@ -29,10 +31,17 @@ TARGET_LENGTH = 0.72
 TARGET_GAP = 0.24
 TARGET_LEFT = 0.28
 TARGET_RIGHT = 0.20
-THRESHOLD = 1.0
+THRESHOLD = 6
 STOP_TRYING_THRESHOLD = 50
-CALL_DIFF_THRESHOLD = 1.45
-SMOOTH_CALL_THRESHOLD = 4.0
+CALL_RATIO_THRESHOLD_LEFT = 1.6
+CALL_RATIO_THRESHOLD_RIGHT = 1.2
+CALL_DIFF_THRESHOLD_LEFT = 2.9
+CALL_DIFF_THRESHOLD_RIGHT = 0.7
+
+USE_CALL_RATIO = False
+
+MAX_CALL_LENGTH = 1.5 #seconds
+
 
 def median5(m):
     s = [m[0]]
@@ -46,10 +55,104 @@ def median5(m):
 
 def smooth(m, radius=3, shape=5):
     w = np.kaiser(radius * 2 + 1, shape)
-
     m = np.pad(m[:], radius, 'mean', stat_length=radius*2)
-    #return np.convolve(w / w.sum(), m[0] * radius + m + m[-1] * radius, 'valid')
     return np.convolve(w / w.sum(), m, 'valid')
+
+
+def find_calls_in_call_diff(call_diff, threshold_left, threshold_right, samples2secs):
+    possible_starts = np.where(call_diff > threshold_left)[0]
+
+    #coalesce possibles into actual syllables
+    starts = []
+    prev = None
+    start = None
+    for p in possible_starts:
+        if p - 1 != prev: # a discontinuity
+            if prev is not None and start is not None:
+                starts.append((start, prev + 1))
+            start = p
+        prev = p
+    if prev is not None:
+        starts.append((start, prev - 1))
+
+    #print samples2secs
+    timed_starts = [(x * samples2secs, y * samples2secs) for x, y in starts]
+
+    print timed_starts
+
+    candidates = []
+    for l_start, l_stop in starts:
+        #leave a little gap to let first syllable drop below last syllable threshold
+        in_call = False
+        r_start = r_stop = None
+        for k in range(l_stop + 3, min(len(call_diff), l_stop + int(MAX_CALL_LENGTH / samples2secs))):
+            if call_diff[k] > threshold_right:
+                if not in_call:
+                    r_start = k
+                in_call = True
+            elif in_call:
+                r_stop = k
+                break
+
+        if r_stop is not None:
+            left_strength = np.median(call_diff[l_start:l_stop]) / threshold_left
+            right_strength = np.median(call_diff[r_start:r_stop]) / threshold_right
+            #print l_start, l_stop, left_strength, right_strength
+            left_start = l_start * samples2secs
+            left_stop = l_stop * samples2secs
+            right_start = r_start * samples2secs
+            right_stop = r_stop * samples2secs
+            overall_err = abs(log((right_stop - left_start) / TARGET_LENGTH))
+            left_err = abs(log((left_stop - left_start)  / TARGET_LEFT))
+            gap_err = abs(log((right_start - left_stop) / TARGET_GAP))
+            right_err = abs(log((right_stop - right_start) / TARGET_RIGHT))
+            left_weakness = 0.3 / (left_strength + 1e-3)
+            right_weakness = 0.3 / (right_strength + 1e-3)
+            err = (overall_err * 2 + left_err + gap_err * 2 + right_err + left_weakness + right_weakness)
+            print ("%.2f-%.2f: err %s overall %s left %s right %s gap %s weakness: l %s r %s" %
+                   (left_start, right_stop, err, overall_err, left_err, right_err, gap_err, left_weakness, right_weakness))
+            candidates.append([err, left_start, right_stop])
+
+    candidates.sort()
+
+    print candidates
+    winners = []
+    for score, left_start, right_stop in candidates:
+        if score > THRESHOLD:
+            break
+        if not any(left_start < e and right_stop > s for s, e, sc in winners):
+            winners.append([left_start, right_stop, score])
+        else:
+            print "rejecting overlapping", left_start, right_stop
+
+
+    if 1:
+        axis = [x * samples2secs for x in range(len(call_diff))]
+
+        plt.plot(axis, call_diff)
+
+        wx = []
+        wy = []
+        for w in winners:
+            wx.append((w[0] + w[1]) / 2)
+            wy.append(THRESHOLD - w[2])
+        plt.plot(wx, wy, '^')
+        sx, sy = [], []
+        for i, s in enumerate(starts):
+            for x in range(*s):
+                sx.append(x * samples2secs)
+                sy.append(-0.1 * i)
+        plt.plot(sx, sy, '.')
+
+
+        plt.show()
+
+
+
+    print winners
+    return winners
+
+
 
 
 def locate_calls(audio, title=None):
@@ -65,98 +168,24 @@ def locate_calls(audio, title=None):
     call_max = np.max(call_specgram, 0)
     call_min = np.median(call_specgram, 0)
 
-
     duration = float(audio.duration)
-    effective_samples = overlap * (len(call_max) - 1.0) + NFFT
+    #effective_samples = overlap * (len(call_max) - 1.0) + NFFT
     #XXX better conversion is possible
     samples2secs = duration / len(call_max)
-    #print len(call_max), effective_samples, duration * audio.framerate
 
     call_bin = call_max / call_min
     smooth_call_bin = smooth(call_bin, radius=5)
-    background = smooth(call_bin, radius=90, shape=3)
+    background = smooth(call_bin, radius=150, shape=2)
 
-    call_diff = smooth_call_bin / background
-
-    #possible_birds = np.where(smooth_call_bin - background > SMOOTH_CALL_THRESHOLD)[0]
-    possible_birds = np.where(call_diff > CALL_DIFF_THRESHOLD)[0]
-
-    #coalesce possible_birds into state switches
-    state = 0
-    syllables = []
-    prev = None
-    for pb in possible_birds:
-        if pb - 1 != prev:
-            if prev is not None:
-                call.append(prev + 1)
-            call = [pb]
-            syllables.append(call)
-        prev = pb
-    if prev is not None:
-        call.append(prev + 1)
-
-    #print samples2secs
-    timed_syllables = [(x * samples2secs, y * samples2secs) for x, y in syllables]
-
-    candidates = []
-    for i in range(len(timed_syllables) - 1):
-        left_start, left_stop = timed_syllables[i]
-        for j in range(i + 1, len(timed_syllables)):
-            right_start, right_stop = timed_syllables[j]
-            overall_err = right_stop - left_start - TARGET_LENGTH
-            left_err = left_stop - left_start  - TARGET_LEFT
-            gap_err = right_start - left_stop - TARGET_GAP
-            right_err = right_stop - right_start - TARGET_RIGHT
-            err = overall_err ** 2 * 2 + left_err ** 2 + gap_err ** 2 + right_err ** 2
-            #print i, j,  err
-            if err > STOP_TRYING_THRESHOLD:
-                break
-            candidates.append([err, i, j])
-
-    candidates.sort()
-    #print candidates
-    used = set()
-    winners = []
-    for score, i, j in candidates:
-        if score > THRESHOLD:
-            break
-        if i not in used and j not in used:
-            winners.append([timed_syllables[i][0], timed_syllables[j][1]])
-            used.update((i, j))
-
-
-    if 1:
-        axis = [x * samples2secs for x in range(len(background))]
-
-        plt.plot(axis, (smooth_call_bin - background) * 0.25 + 4)
-        plt.plot(axis, call_diff)
-
-        pb_mask = np.zeros(len(background))
-        for x in possible_birds:
-            pb_mask[x] = 1.1
-        plt.plot(axis, pb_mask)
-
-        #print syllables
-        pb_mask3 = np.zeros(len(background))
-
-        for s, e in syllables:
-            pb_mask3[s] = 0.9
-            pb_mask3[e] = 0.7
-
-        wx = []
-        wy = []
-        for w in winners:
-            wx.append((w[0] + w[1]) / 2)
-            wy.append(0.1)
-        plt.plot(wx, wy, '^')
-
-        #plt.plot(pb_mask3, '.')
-        plt.show()
-
-
+    call_ratio = smooth_call_bin / background
+    call_diff = smooth_call_bin - background
+    if USE_CALL_RATIO:
+        winners = find_calls_in_call_diff(call_ratio, CALL_RATIO_THRESHOLD_LEFT, CALL_RATIO_THRESHOLD_RIGHT, samples2secs)
+    else:
+        winners = find_calls_in_call_diff(call_diff, CALL_DIFF_THRESHOLD_LEFT, CALL_DIFF_THRESHOLD_RIGHT, samples2secs)
 
     #print winners
-    return sorted(winners)
+    return sorted(x[:2] for x in winners)
 
 def main():
     parser = argparse.ArgumentParser()
