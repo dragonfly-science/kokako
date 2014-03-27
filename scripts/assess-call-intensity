@@ -1,0 +1,100 @@
+#!/usr/bin/python
+
+import argparse
+import os
+import sys
+import json
+
+FFT_SIZE=1024
+NEAR_MIN = 0.05
+NEAR_MAX = 0.95
+
+from kokako.score import get_audio
+
+from math import log
+import numpy as np
+from matplotlib import mlab, pyplot as plt
+
+from scipy.signal import fftconvolve
+
+def directories_to_file_map(dirs):
+    mapping = {}
+    for d in dirs:
+        for root, subdirs, files in os.walk(d):
+            for f in files:
+                if f.endswith(".wav"):
+                    if f in mapping:
+                        print >> sys.stderr, ("%s is both %s and %s" %
+                                              (f, mapping[f], os.path.join(root, f)))
+                    mapping[f] = os.path.join(root, f)
+
+    return mapping
+
+
+def parse_line(line):
+    bits = line.split()
+    name = bits[0]
+    #there should be a file name followed by an even number of
+    #monotonically increasing positive float values
+    if len(bits) & 1 == 0:
+        print >> sys.stderr, "malformed line: %r" % line
+    calls = []
+    if len(bits) > 1:
+        prev_s = -1
+        prev_e = -1
+        for i in range(1, len(bits), 2):
+            s, e = float(bits[i]), float(bits[i + 1])
+            if e < s:
+                print >> sys.stderr, "line has negative sized call %r" % line
+            if s <= prev_e:
+                print >> sys.stderr, "merging calls on %r" % line
+                calls.pop()
+                s = prev_s
+            prev_e = e
+            prev_s = s
+            calls.append((s, e))
+
+    return name, calls
+
+def assess_calls(timings, output, file_map, lf, hf):
+    for line in timings:
+        path, calls = parse_line(line)
+        name = os.path.basename(path)
+        out = [name]
+        if not calls:
+            continue
+        fn = file_map[name]
+        for s, e in calls:
+            audio = get_audio(fn, s, e - s)
+            audio.calculate_specgram(FFT_SIZE, FFT_SIZE / 2)
+            #XXX could calculate this less often
+            call_band = np.where((audio.specgram_freqs >= lf) *
+                                 (audio.specgram_freqs <= hf))[0]
+            call_specgram = audio.specgram[call_band]
+            call_values = np.sort(call_specgram, axis=None)
+            low = call_values[len(call_values) * NEAR_MIN]
+            high = call_values[len(call_values) * NEAR_MAX]
+            score = log(high / (low + 1e-6))
+            out.append([s, e, score])
+        print >> output, json.dumps(out)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-L', '--low-frequency', type=float,
+                        help='lower bound of call range')
+    parser.add_argument('-H', '--high-frequency', type=float,
+                        help='upper bound of call range')
+    parser.add_argument('-t', '--timings', type=argparse.FileType('r'),
+                        help='file from which to read timings')
+    parser.add_argument('-d', '--audio-directory', action='append',
+                       help='find audio in this directory')
+    parser.add_argument('-o', '--output', default=sys.stdout,
+                        type=argparse.FileType('w'), help='output file')
+    args = parser.parse_args()
+
+    file_map = directories_to_file_map(args.audio_directory)
+
+    assess_calls(args.timings, args.output, file_map,
+                 args.low_frequency, args.high_frequency)
+
+main()
