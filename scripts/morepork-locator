@@ -3,8 +3,6 @@ import argparse
 import os
 import sys
 
-from math import log
-
 from kokako.score import get_audio
 
 import numpy as np
@@ -31,12 +29,12 @@ TARGET_LENGTH = 0.72
 TARGET_GAP = 0.24
 TARGET_LEFT = 0.28
 TARGET_RIGHT = 0.20
-THRESHOLD = 6
+THRESHOLD = 1.8
 STOP_TRYING_THRESHOLD = 50
 CALL_RATIO_THRESHOLD_LEFT = 1.6
 CALL_RATIO_THRESHOLD_RIGHT = 1.2
 CALL_DIFF_THRESHOLD_LEFT = 2.9
-CALL_DIFF_THRESHOLD_RIGHT = 0.7
+CALL_DIFF_THRESHOLD_RIGHT = 0.5
 
 USE_CALL_RATIO = False
 
@@ -95,20 +93,20 @@ def find_calls_in_call_diff(call_diff, threshold_left, threshold_right, samples2
                 break
 
         if r_stop is not None:
-            left_strength = np.median(call_diff[l_start:l_stop]) / threshold_left
-            right_strength = np.median(call_diff[r_start:r_stop]) / threshold_right
+            left_strength = np.median(call_diff[l_start:l_stop])
+            right_strength = np.median(call_diff[r_start:r_stop])
             #print l_start, l_stop, left_strength, right_strength
             left_start = l_start * samples2secs
             left_stop = l_stop * samples2secs
             right_start = r_start * samples2secs
             right_stop = r_stop * samples2secs
-            overall_err = abs(log((right_stop - left_start) / TARGET_LENGTH))
-            left_err = abs(log((left_stop - left_start)  / TARGET_LEFT))
-            gap_err = abs(log((right_start - left_stop) / TARGET_GAP))
-            right_err = abs(log((right_stop - right_start) / TARGET_RIGHT))
-            left_weakness = 0.3 / (left_strength + 1e-3)
-            right_weakness = 0.3 / (right_strength + 1e-3)
-            err = (overall_err * 2 + left_err + gap_err * 2 + right_err + left_weakness + right_weakness)
+            overall_err = (right_stop - left_start - TARGET_LENGTH) ** 2
+            left_err = (left_stop - left_start  - TARGET_LEFT) ** 2
+            gap_err = (right_start - left_stop - TARGET_GAP) ** 2
+            right_err = (right_stop - right_start - TARGET_RIGHT) ** 2
+            left_weakness = 1.0 / (left_strength + 1e-3) ** 2
+            right_weakness = 0.4 / (right_strength + 1e-3) ** 2
+            err = (overall_err * 6 + left_err + gap_err * 2 + right_err + left_weakness + right_weakness)
             print ("%.2f-%.2f: err %s overall %s left %s right %s gap %s weakness: l %s r %s" %
                    (left_start, right_stop, err, overall_err, left_err, right_err, gap_err, left_weakness, right_weakness))
             candidates.append([err, left_start, right_stop])
@@ -133,9 +131,10 @@ def find_calls_in_call_diff(call_diff, threshold_left, threshold_right, samples2
 
         wx = []
         wy = []
-        for w in winners:
-            wx.append((w[0] + w[1]) / 2)
-            wy.append(THRESHOLD - w[2])
+        for w in sorted(winners):
+            for x in range(int(w[0] / samples2secs), int(w[1] / samples2secs)):
+                wx.append(x * samples2secs)
+                wy.append(THRESHOLD - w[2])
         plt.plot(wx, wy, '^')
         sx, sy = [], []
         for i, s in enumerate(starts):
