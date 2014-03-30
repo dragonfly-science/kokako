@@ -63,7 +63,10 @@ def assess_calls(timings, output, file_map, lf, hf):
         name = os.path.basename(path)
         out = [name]
         if calls:
-            fn = file_map[name]
+            try:
+                fn = file_map[name]
+            except KeyError:
+                print >> sys.stderr, "missing %s" % name
             for s, e in calls:
                 audio = get_audio(fn, s, e - s)
                 audio.calculate_specgram(FFT_SIZE, FFT_SIZE / 2)
