@@ -1,0 +1,38 @@
+#!/usr/bin/python
+
+import argparse
+import json
+import os, sys
+import matplotlib.pyplot as plt
+
+
+def sort_calls(fn):
+    f = open(fn)
+    scores = []
+    for line in f:
+        calls = json.loads(line)[1:]
+        scores.extend(x[2] for x in calls)
+    f.close()
+    scores.sort()
+    step = 1.0 / len(scores)
+    steps = []
+    for i, x in enumerate(scores):
+        steps.append(i * step)
+    return steps, scores
+
+def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('files', nargs='+',
+                        help='file from which to read timings')
+    args = parser.parse_args()
+    for fn in args.files:
+        steps, scores = sort_calls(fn)
+        plt.plot(scores, steps, label=os.path.basename(fn))
+
+    #plt.axes().set_aspect('equal')
+    plt.legend(loc='lower right', frameon=False)
+    plt.show()
+
+
+main()
