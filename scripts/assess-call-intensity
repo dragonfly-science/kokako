@@ -40,13 +40,14 @@ def parse_line(line):
         print >> sys.stderr, "malformed line: %r" % line
     calls = []
     if len(bits) > 1:
-        prev_s = -1
-        prev_e = -1
+        prev_s = 0
+        prev_e = 0
         for i in range(1, len(bits), 2):
-            s, e = float(bits[i]), float(bits[i + 1])
+            s = max(float(bits[i]), 0.0)
+            e = max(float(bits[i + 1]), 0.0)
             if e < s:
                 print >> sys.stderr, "line has negative sized call %r" % line
-            if s <= prev_e:
+            if s <= prev_e and calls:
                 print >> sys.stderr, "merging calls on %r" % line
                 calls.pop()
                 s = prev_s
@@ -61,21 +62,24 @@ def assess_calls(timings, output, file_map, lf, hf):
         path, calls = parse_line(line)
         name = os.path.basename(path)
         out = [name]
-        if not calls:
-            continue
-        fn = file_map[name]
-        for s, e in calls:
-            audio = get_audio(fn, s, e - s)
-            audio.calculate_specgram(FFT_SIZE, FFT_SIZE / 2)
-            #XXX could calculate this less often
-            call_band = np.where((audio.specgram_freqs >= lf) *
-                                 (audio.specgram_freqs <= hf))[0]
-            call_specgram = audio.specgram[call_band]
-            call_values = np.sort(call_specgram, axis=None)
-            low = call_values[len(call_values) * NEAR_MIN]
-            high = call_values[len(call_values) * NEAR_MAX]
-            score = log(high / (low + 1e-6))
-            out.append([s, e, score])
+        if calls:
+            fn = file_map[name]
+            for s, e in calls:
+                audio = get_audio(fn, s, e - s)
+                audio.calculate_specgram(FFT_SIZE, FFT_SIZE / 2)
+                #XXX could calculate this less often
+                call_band = np.where((audio.specgram_freqs >= lf) *
+                                     (audio.specgram_freqs <= hf))[0]
+                call_specgram = audio.specgram[call_band]
+                call_values = np.sort(call_specgram, axis=None)
+                low = call_values[len(call_values) * NEAR_MIN]
+                high = call_values[len(call_values) * NEAR_MAX]
+                try:
+                    score = log(high / (low + 1e-6))
+                except ValueError:
+                    print >> sys.stderr, ("bad file? %r high %f low %f; s %f e %f" %
+                                          (fn, high, low, s, e))
+                out.append([s, e, score])
         print >> output, json.dumps(out)
 
 def main():
