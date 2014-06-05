@@ -1,0 +1,31 @@
+#!/usr/bin/python
+
+import argparse
+import os
+import sys
+import json
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-o', '--output', default=sys.stdout,
+                        type=argparse.FileType('w'), help='output file')
+    parser.add_argument('files', nargs='+', type=argparse.FileType('r'), 
+                        help='input files to deduplicate')
+    args = parser.parse_args()
+    d = {}
+    dupes = 0
+    for f in args.files:
+        for line in f:
+            line = line.strip()
+            name = json.loads(line)[0]
+            if name in d and d[name] != line:
+                print >> sys.stderr, "duplicate %d\n%s\n%s\n%s" % (dupes, 
+                                                                   name, 
+                                                                   d[name], line)
+                dupes += 1
+            d[name] = line
+    
+    for k in sorted(d):
+        print >> args.output, d[k]
+
+main()
