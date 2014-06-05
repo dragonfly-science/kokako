@@ -1,0 +1,61 @@
+#!/usr/bin/python
+
+import argparse
+import os
+import sys
+import json
+
+FFT_SIZE=1024
+NEAR_MIN = 0.05
+NEAR_MAX = 0.95
+
+from kokako.score import get_audio
+
+from math import log
+import numpy as np
+from matplotlib import mlab, pyplot as plt
+
+from scipy.signal import fftconvolve
+
+def file_generator(d):
+    from os.path import join, relpath
+    for root, subdirs, files in os.walk(d):
+        print >> sys.stderr, root
+        for f in files:
+            if f.endswith(".wav"):
+                yield([f, relpath(join(root, f), d)])
+
+def assess_calls(output, d, *band_extrema):
+    call_band = None
+    noise_band = None
+    bands = {}
+    for fn, ffn in file_generator(d):
+        out = {'basename': fn, 'full-path': ffn}
+        audio = get_audio(os.path.join(d, ffn))
+        audio.calculate_specgram(FFT_SIZE, FFT_SIZE / 2)
+        for lf, hf in band_extrema:
+            band_name = 'band-%s-%s' % (lf, hf)
+            if band_name not in bands:
+                bands[band_name] = np.where((audio.specgram_freqs >= lf) *
+                                            (audio.specgram_freqs <= hf))[0]
+            band = bands[band_name]
+            band_specgram = audio.specgram[band]
+            intensity = np.mean(band_specgram, 0)
+            out[band_name + '_mean'] = np.mean(intensity)
+            out[band_name + '_stddev'] = np.std(intensity)
+
+        #print >> sys.stderr, out
+        print >> output, json.dumps(out)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', '--audio-directory',
+                       help='find audio in this directory')
+    parser.add_argument('-o', '--output', default=sys.stdout,
+                        type=argparse.FileType('w'), help='output file')
+    args = parser.parse_args()
+
+    assess_calls(args.output, args.audio_directory,
+                 (20, 400), (550, 1000), (1500, 2200))
+
+main()
